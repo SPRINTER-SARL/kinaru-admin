@@ -1,10 +1,14 @@
 // Ajuste ce chemin si besoin
 import { initializeApp } from "firebase/app";
+import { getAuth, GoogleAuthProvider } from "firebase/auth";
 import {
-  getAuth,
-  GoogleAuthProvider,
-} from "firebase/auth";
-import { getFirestore, serverTimestamp, Timestamp, arrayUnion, arrayRemove, increment } from "firebase/firestore";
+  getFirestore,
+  serverTimestamp,
+  Timestamp,
+  arrayUnion,
+  arrayRemove,
+  increment,
+} from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
 const firebaseConfig = {
@@ -27,3 +31,5 @@ export const storage = getStorage(app);
 
 // Exports utiles (timestamps & helpers Firestore)
 export { serverTimestamp, Timestamp, arrayUnion, arrayRemove, increment };
+
+// export default firebaseConfig;
