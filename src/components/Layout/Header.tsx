@@ -1,14 +1,29 @@
-import React from 'react';
-import { Bell, Moon, Sun, LogOut, Globe, User } from 'lucide-react';
+import React from "react";
+import { Bell, Moon, Sun, LogOut, Globe, User } from "lucide-react";
+import { useAppSelector, useAppDispatch } from "../../store/hooks";
+import { getRoleLabelById } from "../../utils/firebaseCollections";
+import { logout } from "../../pages/login/zuthThunks";
 
 interface HeaderProps {
   darkMode: boolean;
   onToggleDarkMode: () => void;
-  language: 'fr' | 'en';
+  language: "fr" | "en";
   onToggleLanguage: () => void;
 }
 
-export default function Header({ darkMode, onToggleDarkMode, language, onToggleLanguage }: HeaderProps) {
+export default function Header({
+  darkMode,
+  onToggleDarkMode,
+  language,
+  onToggleLanguage,
+}: HeaderProps) {
+  const dispatch = useAppDispatch();
+  const { user, loading, error } = useAppSelector((state) => state.auth);
+
+  const handleLogout = () => {
+    dispatch(logout());
+  };
+
   return (
     <header className="bg-white dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700 px-6 py-4">
       <div className="flex items-center justify-between">
@@ -55,12 +70,20 @@ export default function Header({ darkMode, onToggleDarkMode, language, onToggleL
                 <User className="w-4 h-4 text-white" />
               </div>
               <div className="hidden sm:block">
-                <p className="text-sm font-medium text-gray-900 dark:text-white">Admin Principal</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Super Administrateur</p>
+                <p className="text-sm font-medium text-gray-900 dark:text-white">
+                  {user?.nom || user?.prenom || user?.email || "Utilisateur"}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  {getRoleLabelById(user?.typeUsersId!!) || "Administrateur"}
+                </p>
               </div>
             </div>
-            
-            <button className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors">
+
+            <button
+              className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
+              onClick={handleLogout}
+              title="Déconnexion"
+            >
               <LogOut className="w-5 h-5 text-gray-600 dark:text-gray-300" />
             </button>
           </div>

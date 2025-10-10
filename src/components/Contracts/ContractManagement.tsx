@@ -1,3 +1,4 @@
+// Updated ContractManagement.tsx
 import React, { useState, useEffect, useMemo } from "react";
 import {
   Search,
@@ -14,14 +15,15 @@ import {
   CheckCircle,
   XCircle,
 } from "lucide-react";
-import { collection, getDocs } from "firebase/firestore";
-import { db } from "../../firebase/firebaseConfig";
-import collections from "../../utils/firebaseCollections";
 import {
   FirestoreContract,
   FirestoreProperty,
   FirestoreUser,
-} from "../../types";
+} from "../../types"; // Adjust path as needed
+
+import { useAppDispatch, useAppSelector } from "../../store/hooks";
+import { clearError } from "./contractsSlice";
+import { archiveContract, signContract } from "./contractsThunk";
 
 const statusMap: { [key: number]: string } = {
   0: "expire",
@@ -30,9 +32,15 @@ const statusMap: { [key: number]: string } = {
 };
 
 const ContractManagement: React.FC = () => {
-  const [contracts, setContracts] = useState<FirestoreContract[]>([]);
-  const [users, setUsers] = useState<FirestoreUser[]>([]);
-  const [properties, setProperties] = useState<FirestoreProperty[]>([]);
+  const dispatch = useAppDispatch();
+  const {
+    list: contracts,
+    loading: contractsLoading,
+    error: contractsError,
+  } = useAppSelector((state) => state.contracts);
+  const { list: users } = useAppSelector((state) => state.users); // Assuming users slice
+  const { list: properties } = useAppSelector((state) => state.properties); // Assuming properties slice
+
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [showArchived, setShowArchived] = useState<boolean>(false);
@@ -41,82 +49,25 @@ const ContractManagement: React.FC = () => {
   const [showCreateModal, setShowCreateModal] = useState<boolean>(false);
   const [showSignatureModal, setShowSignatureModal] = useState<boolean>(false);
 
-  // Fetch contracts, users, and properties from Firestore
+  // Clear error on mount or when needed
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        // Fetch contracts
-        const contractsCollection = collection(db, collections.CONTRATS);
-        const contractsSnapshot = await getDocs(contractsCollection);
-        const contractsList: FirestoreContract[] = contractsSnapshot.docs.map(
-          (doc) => ({
-            ...(doc.data() as FirestoreContract),
-            id: doc.id,
-          })
-        );
-        setContracts(contractsList);
-
-        // Fetch users
-        const usersCollection = collection(db, collections.USERS);
-        const usersSnapshot = await getDocs(usersCollection);
-        const usersList: FirestoreUser[] = usersSnapshot.docs.map((doc) => ({
-          uid: doc.id,
-          nom: doc.data().nom,
-          prenom: doc.data().prenom,
-        }));
-        setUsers(usersList);
-
-        // Fetch properties
-        const propertiesCollection = collection(db, collections.PROPRIETES);
-        const propertiesSnapshot = await getDocs(propertiesCollection);
-        const propertiesList: FirestoreProperty[] = propertiesSnapshot.docs.map(
-          (doc) => ({
-            id: doc.id,
-            userId: doc.data().userId || "",
-            title: doc.data().title || "",
-            description: doc.data().description || "",
-            type: doc.data().type || "",
-            statut: doc.data().statut || 0,
-            etat: doc.data().etat || 0,
-            validationStatus: doc.data().validationStatus || "en_attente",
-            prix: doc.data().prix || 0,
-            devise: doc.data().devise || "XAF",
-            frequence: doc.data().frequence || "Mois",
-            adresse: doc.data().adresse || "",
-            arrondissement: doc.data().arrondissement || "",
-            quartier: doc.data().quartier || "",
-            ville: doc.data().ville || "",
-            region: doc.data().region || "",
-            pays: doc.data().pays || "",
-            nomType: doc.data().nomType || "",
-            nombrePieces: doc.data().nombrePieces || "",
-            nombreSalleBains: doc.data().nombreSalleBains || "",
-            surface: doc.data().surface || "",
-            favorite: doc.data().favorite || 0,
-            certificate: doc.data().certificate || "",
-            images: doc.data().images || [],
-            localImages: doc.data().localImages || [],
-            position: doc.data().position || { lat: 0, lng: 0 },
-            created_at: doc.data().created_at || "",
-            updated_at: doc.data().updated_at || "",
-            usage: doc.data().usage || "",
-          })
-        );
-        setProperties(propertiesList);
-      } catch (error) {
-        console.error("Error fetching data:", error);
-      }
-    };
-
-    fetchData();
-  }, []);
+    if (contractsError) {
+      dispatch(clearError());
+    }
+  }, [contractsError, dispatch]);
 
   const filteredContracts = useMemo(() => {
     return contracts
       .filter((contract) => {
-        const tenant = users.find((u) => u.uid === contract.locataireId);
-        const owner = users.find((u) => u.uid === contract.proprietaireId);
-        const property = properties.find((p) => p.id === contract.proprieteId);
+        const tenant = users.find(
+          (u: FirestoreUser) => u.uid === contract.locataireId
+        );
+        const owner = users.find(
+          (u: FirestoreUser) => u.uid === contract.proprietaireId
+        );
+        const property = properties.find(
+          (p: FirestoreProperty) => p.id === contract.proprieteId
+        );
 
         const matchesSearch =
           (tenant ? `${tenant.nom} ${tenant.prenom}` : "")
@@ -158,21 +109,38 @@ const ContractManagement: React.FC = () => {
     });
   };
 
-  const handleContractAction = (contractId: string, action: string) => {
+  const handleContractAction = async (contractId: string, action: string) => {
     console.log(`Action ${action} sur contrat ${contractId}`);
-    if (action === "sign") {
-      setSelectedContract(contracts.find((c) => c.id === contractId) || null);
-      setShowSignatureModal(true);
+    switch (action) {
+      case "sign":
+        await dispatch(signContract(contractId));
+        setShowSignatureModal(false);
+        setSelectedContract(null);
+        break;
+      case "archive":
+        await dispatch(archiveContract(contractId));
+        break;
+      case "edit":
+        // Redirect to edit page
+        window.location.href = `/contracts/${contractId}/edit`;
+        break;
+      default:
+        break;
     }
-    // Implement other Firebase updates here
   };
 
   const ContractCard: React.FC<{ contract: FirestoreContract }> = ({
     contract,
   }) => {
-    const tenant = users.find((u) => u.uid === contract.locataireId);
-    const owner = users.find((u) => u.uid === contract.proprietaireId);
-    const property = properties.find((p) => p.id === contract.proprieteId);
+    const tenant = users.find(
+      (u: FirestoreUser) => u.uid === contract.locataireId
+    );
+    const owner = users.find(
+      (u: FirestoreUser) => u.uid === contract.proprietaireId
+    );
+    const property = properties.find(
+      (p: FirestoreProperty) => p.id === contract.proprieteId
+    );
 
     const isExpiringSoon = () => {
       const endDate = new Date(contract.dateFinContrat);
@@ -322,6 +290,7 @@ const ContractManagement: React.FC = () => {
               onClick={() => setSelectedContract(contract)}
               className="p-2 text-gray-400 hover:text-blue-500 transition-colors"
               title="Voir détails"
+              disabled={contractsLoading}
             >
               <Eye className="w-4 h-4" />
             </button>
@@ -329,14 +298,19 @@ const ContractManagement: React.FC = () => {
               onClick={() => handleContractAction(contract.id, "edit")}
               className="p-2 text-gray-400 hover:text-orange-500 transition-colors"
               title="Modifier"
+              disabled={contractsLoading}
             >
               <Edit className="w-4 h-4" />
             </button>
             {contract.signatureStatus === "en_attente" && (
               <button
-                onClick={() => handleContractAction(contract.id, "sign")}
+                onClick={() => {
+                  setSelectedContract(contract);
+                  setShowSignatureModal(true);
+                }}
                 className="p-2 text-gray-400 hover:text-green-500 transition-colors"
                 title="Signer"
+                disabled={contractsLoading}
               >
                 <CheckCircle className="w-4 h-4" />
               </button>
@@ -346,6 +320,7 @@ const ContractManagement: React.FC = () => {
                 onClick={() => handleContractAction(contract.id, "archive")}
                 className="p-2 text-gray-400 hover:text-purple-500 transition-colors"
                 title="Archiver"
+                disabled={contractsLoading}
               >
                 <Archive className="w-4 h-4" />
               </button>
@@ -355,6 +330,18 @@ const ContractManagement: React.FC = () => {
       </div>
     );
   };
+
+  if (contractsLoading && contracts.length === 0) {
+    return <div className="p-6 text-center">Chargement des contrats...</div>;
+  }
+
+  if (contractsError) {
+    return (
+      <div className="p-6 text-center text-red-500">
+        Erreur: {contractsError}
+      </div>
+    );
+  }
 
   const expiringContracts = getExpiringContracts();
 
@@ -392,12 +379,14 @@ const ContractManagement: React.FC = () => {
                 ? "bg-gray-500 text-white"
                 : "bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-600"
             }`}
+            disabled={contractsLoading}
           >
             {showArchived ? "Masquer archivés" : "Voir archivés"}
           </button>
           <button
             onClick={() => setShowCreateModal(true)}
             className="flex items-center space-x-2 bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600 transition-colors"
+            disabled={contractsLoading}
           >
             <Plus className="w-4 h-4" />
             <span>Nouveau contrat</span>
@@ -415,6 +404,7 @@ const ContractManagement: React.FC = () => {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent dark:bg-slate-700 dark:text-white"
+              disabled={contractsLoading}
             />
           </div>
 
@@ -422,6 +412,7 @@ const ContractManagement: React.FC = () => {
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
             className="px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent dark:bg-slate-700 dark:text-white"
+            disabled={contractsLoading}
           >
             <option value="all">Tous les statuts</option>
             <option value="actif">Actif</option>
@@ -439,6 +430,7 @@ const ContractManagement: React.FC = () => {
                 checked={showArchived}
                 onChange={(e) => setShowArchived(e.target.checked)}
                 className="rounded border-gray-300 text-orange-500 focus:ring-orange-500"
+                disabled={contractsLoading}
               />
               <span className="text-sm text-gray-700 dark:text-gray-300">
                 Inclure archivés
@@ -573,15 +565,18 @@ const ContractManagement: React.FC = () => {
                       </label>
                       <p className="text-gray-900 dark:text-white">
                         {users.find(
-                          (u) => u.uid === selectedContract.locataireId
+                          (u: FirestoreUser) =>
+                            u.uid === selectedContract.locataireId
                         )
                           ? `${
                               users.find(
-                                (u) => u.uid === selectedContract.locataireId
+                                (u: FirestoreUser) =>
+                                  u.uid === selectedContract.locataireId
                               )!.nom
                             } ${
                               users.find(
-                                (u) => u.uid === selectedContract.locataireId
+                                (u: FirestoreUser) =>
+                                  u.uid === selectedContract.locataireId
                               )!.prenom
                             }`
                           : "Inconnu"}
@@ -593,15 +588,18 @@ const ContractManagement: React.FC = () => {
                       </label>
                       <p className="text-gray-900 dark:text-white">
                         {users.find(
-                          (u) => u.uid === selectedContract.proprietaireId
+                          (u: FirestoreUser) =>
+                            u.uid === selectedContract.proprietaireId
                         )
                           ? `${
                               users.find(
-                                (u) => u.uid === selectedContract.proprietaireId
+                                (u: FirestoreUser) =>
+                                  u.uid === selectedContract.proprietaireId
                               )!.nom
                             } ${
                               users.find(
-                                (u) => u.uid === selectedContract.proprietaireId
+                                (u: FirestoreUser) =>
+                                  u.uid === selectedContract.proprietaireId
                               )!.prenom
                             }`
                           : "Inconnu"}
@@ -613,7 +611,8 @@ const ContractManagement: React.FC = () => {
                       </label>
                       <p className="text-gray-900 dark:text-white">
                         {properties.find(
-                          (p) => p.id === selectedContract.proprieteId
+                          (p: FirestoreProperty) =>
+                            p.id === selectedContract.proprieteId
                         )?.title || "Inconnue"}
                       </p>
                     </div>
@@ -671,6 +670,7 @@ const ContractManagement: React.FC = () => {
                     handleContractAction(selectedContract.id, "edit")
                   }
                   className="flex items-center space-x-2 bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600 transition-colors"
+                  disabled={contractsLoading}
                 >
                   <Edit className="w-4 h-4" />
                   <span>Modifier</span>
@@ -683,6 +683,7 @@ const ContractManagement: React.FC = () => {
                   <button
                     onClick={() => setShowSignatureModal(true)}
                     className="flex items-center space-x-2 bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition-colors"
+                    disabled={contractsLoading}
                   >
                     <CheckCircle className="w-4 h-4" />
                     <span>Signer</span>
@@ -721,12 +722,11 @@ const ContractManagement: React.FC = () => {
 
               <div className="flex space-x-3">
                 <button
-                  onClick={() => {
-                    console.log("Contrat signé:", selectedContract.id);
-                    setShowSignatureModal(false);
-                    setSelectedContract(null);
-                  }}
+                  onClick={() =>
+                    handleContractAction(selectedContract.id, "sign")
+                  }
                   className="flex-1 bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition-colors"
+                  disabled={contractsLoading}
                 >
                   Confirmer signature
                 </button>
@@ -738,6 +738,22 @@ const ContractManagement: React.FC = () => {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create Modal Placeholder - Implement as needed */}
+      {showCreateModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-md w-full p-6">
+            <h2 className="text-xl font-bold mb-4">Nouveau contrat</h2>
+            <p>Implémentez le formulaire de création ici.</p>
+            <button
+              onClick={() => setShowCreateModal(false)}
+              className="mt-4 px-4 py-2 bg-gray-500 text-white rounded"
+            >
+              Fermer
+            </button>
           </div>
         </div>
       )}

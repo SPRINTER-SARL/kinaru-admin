@@ -81,6 +81,7 @@ export interface FirestoreProperty {
 
 export interface User {
   uid: string;
+  id: string;
   nom: string;
   prenom: string;
   email: string;

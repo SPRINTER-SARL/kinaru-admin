@@ -24,7 +24,7 @@ const menuItems = [
   { path: "/dashboard", label: "Dashboard", icon: BarChart3 },
   { path: "/users", label: "Utilisateurs", icon: Users },
   { path: "/properties", label: "Propriétés", icon: Building },
-  { path: "/map", label: "Carte", icon: Map },
+  { path: "/email", label: "Carte", icon: Map },
   { path: "/transactions", label: "Transactions", icon: CreditCard },
   { path: "/contracts", label: "Contrats", icon: FileText },
   { path: "/messaging", label: "Messagerie", icon: MessageSquare },

@@ -1,10 +1,19 @@
+// Updated UserManagement.tsx
 import React, { useState, useEffect, useMemo } from "react";
-import { Search, Filter, Plus, Edit, Ban, Check, X, Eye } from "lucide-react";
-import { collection, getDocs } from "firebase/firestore";
-import { db } from "../../firebase/firebaseConfig";
-import collections from "../../utils/firebaseCollections";
-import { User } from "../../types";
+import { useDispatch } from "react-redux";
+import { Search, Plus, Edit, Ban, Check, X, Eye } from "lucide-react";
 import { Link } from "react-router-dom";
+import { User } from "../../types"; // Adjust path as needed
+import {
+  listenToUsers,
+  approveUser,
+  banUser,
+  unbanUser,
+  rejectUser,
+} from "./usersThunks"; // Adjust path
+import { useAppDispatch, useAppSelector } from "../../store/hooks";
+import { clearError } from "./usersSlice";
+import { roleMap } from "../../utils/firebaseCollections";
 
 const statusMap: { [key: number]: string } = {
   0: "en_attente",
@@ -12,15 +21,14 @@ const statusMap: { [key: number]: string } = {
   2: "banni",
 };
 
-const roleMap: { [key: number]: string } = {
-  1: "client",
-  2: "proprietaire",
-  3: "agent",
-  4: "agence",
-};
-
 const UserManagement: React.FC = () => {
-  const [users, setUsers] = useState<User[]>([]);
+  const dispatch = useAppDispatch();
+  const {
+    list: users,
+    loading,
+    error,
+  } = useAppSelector((state) => state.users);
+
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [roleFilter, setRoleFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -28,24 +36,19 @@ const UserManagement: React.FC = () => {
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
 
-  // Fetch users from Firestore
+  // Start listening to users on mount
   useEffect(() => {
-    const fetchUsers = async () => {
-      try {
-        const usersCollection = collection(db, collections.USERS);
-        const usersSnapshot = await getDocs(usersCollection);
-        const usersList: User[] = usersSnapshot.docs.map((doc) => ({
-          ...(doc.data() as User),
-          uid: doc.id,
-        }));
-        setUsers(usersList);
-      } catch (error) {
-        console.error("Error fetching users:", error);
-      }
-    };
+    dispatch(listenToUsers());
 
-    fetchUsers();
-  }, []);
+    return () => {};
+  }, [dispatch]);
+
+  // Clear error on mount or when needed
+  useEffect(() => {
+    if (error) {
+      dispatch(clearError());
+    }
+  }, [error, dispatch]);
 
   const filteredUsers = useMemo(() => {
     return users
@@ -77,34 +80,42 @@ const UserManagement: React.FC = () => {
       });
   }, [users, searchTerm, roleFilter, statusFilter, sortBy]);
 
-  const handleUserAction = (userId: string, action: string) => {
+  const handleUserAction = async (userId: string, action: string) => {
     console.log(`Action ${action} sur utilisateur ${userId}`);
 
-    let link = "";
-
     switch (action) {
+      case "approve":
+        await dispatch(approveUser(userId));
+        break;
+      case "reject":
+        await dispatch(rejectUser(userId));
+        break;
+      case "ban":
+        await dispatch(banUser(userId));
+        break;
+      case "unban":
+        await dispatch(unbanUser(userId));
+        break;
       case "edit":
-        link = `/users/${userId}/edit`;
+        // Redirect to edit page
+        window.location.href = `/users/${userId}/edit`;
         break;
       case "view":
-        link = `/users/${userId}`;
+        setSelectedUser(users.find((u) => u.id === userId) || null);
         break;
       case "delete":
-        link = `/users/${userId}/delete`;
+        window.location.href = `/users/${userId}/delete`;
         break;
       default:
-        link = `/users/${userId}`;
+        setSelectedUser(users.find((u) => u.id === userId) || null);
         break;
     }
-
-    // Exemple : rediriger automatiquement
-    window.location.href = link;
-
-    // Ou retourner le lien si tu veux juste l'utiliser ailleurs
-    return link;
   };
 
-  const UserCard: React.FC<{ user: User }> = ({ user }) => (
+  const UserCard: React.FC<{
+    user: User;
+    onAction: (action: string) => void;
+  }> = ({ user, onAction }) => (
     <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 hover:shadow-md transition-shadow">
       <div className="flex items-start justify-between">
         <div className="flex items-center space-x-4">
@@ -116,8 +127,7 @@ const UserManagement: React.FC = () => {
             />
           ) : (
             <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-orange-500 rounded-full flex items-center justify-center text-white font-semibold">
-              {user.nom[0]}
-              {user.prenom[0]}
+              {user.nom && user.nom[0]}{user.prenom && user.prenom[0]}
             </div>
           )}
           <div>
@@ -158,14 +168,14 @@ const UserManagement: React.FC = () => {
 
         <div className="flex items-center space-x-2">
           <button
-            onClick={() => setSelectedUser(user)}
+            onClick={() => onAction("view")}
             className="p-2 text-gray-400 hover:text-blue-500 transition-colors"
             title="Voir profil"
           >
             <Eye className="w-4 h-4" />
           </button>
           <Link
-            to={`/users/${user.uid}`}
+            to={`/users/${user.id}`} // Use 'id' consistently
             className="p-2 text-gray-400 hover:text-orange-500 transition-colors"
             title="Modifier"
           >
@@ -174,16 +184,18 @@ const UserManagement: React.FC = () => {
           {statusMap[user.statut] === "en_attente" && (
             <>
               <button
-                onClick={() => handleUserAction(user.uid, "approve")}
+                onClick={() => onAction("approve")}
                 className="p-2 text-gray-400 hover:text-green-500 transition-colors"
                 title="Valider"
+                disabled={loading}
               >
                 <Check className="w-4 h-4" />
               </button>
               <button
-                onClick={() => handleUserAction(user.uid, "reject")}
+                onClick={() => onAction("reject")}
                 className="p-2 text-gray-400 hover:text-red-500 transition-colors"
                 title="Rejeter"
+                disabled={loading}
               >
                 <X className="w-4 h-4" />
               </button>
@@ -191,11 +203,22 @@ const UserManagement: React.FC = () => {
           )}
           {statusMap[user.statut] !== "banni" && (
             <button
-              onClick={() => handleUserAction(user.uid, "ban")}
+              onClick={() => onAction("ban")}
               className="p-2 text-gray-400 hover:text-red-500 transition-colors"
               title="Bannir"
+              disabled={loading}
             >
               <Ban className="w-4 h-4" />
+            </button>
+          )}
+          {statusMap[user.statut] === "banni" && (
+            <button
+              onClick={() => onAction("unban")}
+              className="p-2 text-gray-400 hover:text-green-500 transition-colors"
+              title="Réhabilliter"
+              disabled={loading}
+            >
+              <Check className="w-4 h-4" />
             </button>
           )}
         </div>
@@ -241,7 +264,7 @@ const UserManagement: React.FC = () => {
               </span>
             )}
             {user.cniVerso && (
-              <span className="text-xs bg-yellow-200 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200 px-2 py-1-rounded">
+              <span className="text-xs bg-yellow-200 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200 px-2 py-1 rounded">
                 CNI Verso
               </span>
             )}
@@ -250,6 +273,16 @@ const UserManagement: React.FC = () => {
       )}
     </div>
   );
+
+  if (loading && users.length === 0) {
+    return (
+      <div className="p-6 text-center">Chargement des utilisateurs...</div>
+    );
+  }
+
+  if (error) {
+    return <div className="p-6 text-center text-red-500">Erreur: {error}</div>;
+  }
 
   return (
     <div className="p-6 space-y-6">
@@ -265,6 +298,7 @@ const UserManagement: React.FC = () => {
         <button
           onClick={() => setShowAddModal(true)}
           className="flex items-center space-x-2 bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600 transition-colors"
+          disabled={loading}
         >
           <Plus className="w-4 h-4" />
           <span>Ajouter utilisateur</span>
@@ -281,6 +315,7 @@ const UserManagement: React.FC = () => {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent dark:bg-slate-700 dark:text-white"
+              disabled={loading}
             />
           </div>
 
@@ -288,18 +323,21 @@ const UserManagement: React.FC = () => {
             value={roleFilter}
             onChange={(e) => setRoleFilter(e.target.value)}
             className="px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent dark:bg-slate-700 dark:text-white"
+            disabled={loading}
           >
             <option value="all">Tous les rôles</option>
-            <option value="client">Client</option>
-            <option value="proprietaire">Propriétaire</option>
-            <option value="agent">Agent</option>
-            <option value="agence">Agence</option>
+            {Object.entries(roleMap).map(([id, key]) => (
+              <option key={id} value={key}>
+                {key.charAt(0).toUpperCase() + key.slice(1)}
+              </option>
+            ))}
           </select>
 
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
             className="px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent dark:bg-slate-700 dark:text-white"
+            disabled={loading}
           >
             <option value="all">Tous les statuts</option>
             <option value="actif">Actif</option>
@@ -311,6 +349,7 @@ const UserManagement: React.FC = () => {
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}
             className="px-4 py-2 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent dark:bg-slate-700 dark:text-white"
+            disabled={loading}
           >
             <option value="lastUpdated">Dernière mise à jour</option>
             <option value="name">Nom</option>
@@ -320,7 +359,11 @@ const UserManagement: React.FC = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {filteredUsers.map((user) => (
-          <UserCard key={user.uid} user={user} />
+          <UserCard
+            key={user.id}
+            user={user}
+            onAction={(action) => handleUserAction(user.id, action)}
+          />
         ))}
       </div>
 
@@ -478,15 +521,36 @@ const UserManagement: React.FC = () => {
                     Actions
                   </h4>
                   <div className="space-y-2">
-                    <button className="w-full text-left px-3 py-2 text-sm text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-lg transition-colors">
+                    <button
+                      onClick={() => handleUserAction(selectedUser.id, "edit")}
+                      className="w-full text-left px-3 py-2 text-sm text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-lg transition-colors"
+                      disabled={loading}
+                    >
                       Modifier les informations
                     </button>
                     <button className="w-full text-left px-3 py-2 text-sm text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors">
                       Voir l'historique
                     </button>
-                    <button className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors">
-                      Suspendre le compte
-                    </button>
+                    {statusMap[selectedUser.statut] !== "banni" && (
+                      <button
+                        onClick={() => handleUserAction(selectedUser.id, "ban")}
+                        className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                        disabled={loading}
+                      >
+                        Suspendre le compte
+                      </button>
+                    )}
+                    {statusMap[selectedUser.statut] === "banni" && (
+                      <button
+                        onClick={() =>
+                          handleUserAction(selectedUser.id, "unban")
+                        }
+                        className="w-full text-left px-3 py-2 text-sm text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg transition-colors"
+                        disabled={loading}
+                      >
+                        Réhabilliter le compte
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -551,6 +615,22 @@ const UserManagement: React.FC = () => {
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Modal Placeholder - Implement as needed */}
+      {showAddModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-md w-full p-6">
+            <h2 className="text-xl font-bold mb-4">Ajouter un utilisateur</h2>
+            <p>Implémentez le formulaire d'ajout ici.</p>
+            <button
+              onClick={() => setShowAddModal(false)}
+              className="mt-4 px-4 py-2 bg-gray-500 text-white rounded"
+            >
+              Fermer
+            </button>
           </div>
         </div>
       )}
