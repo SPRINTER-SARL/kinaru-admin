@@ -1,6 +1,9 @@
 // src/store/properties/propertiesSlice.ts
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
-import { listenToProperties, approveProperty, rejectProperty } from "./propertiesThunks";
+import {
+  listenToProperties,
+  updatePropertyValidation,
+} from "./propertiesThunks";
 import { FirestoreProperty } from "../../types";
 
 interface PropertiesState {
@@ -55,36 +58,31 @@ const propertiesSlice = createSlice({
       })
       .addCase(listenToProperties.rejected, (state, action) => {
         state.loading = false;
-        state.error = action.payload as string ?? "Erreur lors du chargement";
+        state.error = (action.payload as string) ?? "Erreur lors du chargement";
       });
 
     // approveProperty
     builder
-      .addCase(approveProperty.pending, (state) => {
+      .addCase(updatePropertyValidation.pending, (state) => {
         state.loading = true;
       })
-      .addCase(approveProperty.fulfilled, (state) => {
+      .addCase(updatePropertyValidation.fulfilled, (state) => {
         state.loading = false;
       })
-      .addCase(approveProperty.rejected, (state, action) => {
+      .addCase(updatePropertyValidation.rejected, (state, action) => {
         state.loading = false;
-        state.error = action.payload as string ?? "Erreur lors de la validation";
+        state.error =
+          (action.payload as string) ?? "Erreur lors de la validation";
       });
 
-    // rejectProperty
-    builder
-      .addCase(rejectProperty.pending, (state) => {
-        state.loading = true;
-      })
-      .addCase(rejectProperty.fulfilled, (state) => {
-        state.loading = false;
-      })
-      .addCase(rejectProperty.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload as string ?? "Erreur lors du rejet";
-      });
   },
 });
 
-export const { setProperties, addProperty, removeProperty, updateProperty, clearError } = propertiesSlice.actions;
-export const propertiesReducer =  propertiesSlice.reducer;
+export const {
+  setProperties,
+  addProperty,
+  removeProperty,
+  updateProperty,
+  clearError,
+} = propertiesSlice.actions;
+export const propertiesReducer = propertiesSlice.reducer;

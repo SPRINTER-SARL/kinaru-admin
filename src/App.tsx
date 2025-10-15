@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import  { useEffect, useState } from "react";
 import {
   BrowserRouter as Router,
   Routes,
@@ -22,6 +22,7 @@ import { useAppSelector } from "./store/hooks";
 import LoginPage from "./pages/login/page";
 import PropertyEditForm from "./pages/properties/upadate-properties";
 import NotificationCard from "./pages/email-template";
+import PropertyAddForm from "./pages/properties/add-propertie";
 
 function App() {
   const { user, error, loading } = useAppSelector((state) => state.auth);
@@ -107,6 +108,10 @@ function App() {
                 <Route path="/users/:id" element={<UserEditForm />} />
                 {/*  */}
                 <Route path="/properties" element={<PropertyManagement />} />
+                    <Route
+                  path="/properties/add"
+                  element={<PropertyAddForm />}
+                />
                 <Route
                   path="/properties/:id/edit"
                   element={<PropertyEditForm />}

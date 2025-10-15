@@ -1,24 +1,16 @@
-// Updated PropertyManagement.tsx
+// components/properties/PropertyManagement.tsx
 import React, { useState, useEffect, useMemo } from "react";
-import {
-  Search,
-  Plus,
-  Edit,
-  Check,
-  X,
-  Eye,
-  MapPin,
-  DollarSign,
-} from "lucide-react";
+import { Search, Plus, X } from "lucide-react";
 import { FirestoreProperty } from "../../types"; // Adjust path as needed
-import {
-  listenToProperties,
-  approveProperty,
-  rejectProperty,
-} from "./propertiesThunks"; // Adjust path
 import { useAppDispatch, useAppSelector } from "../../store/hooks";
-import { clearError } from "./propertiesSlice";
 import { useNavigate } from "react-router-dom";
+import PropertyCard from "./PropertyCard"; // Extracted component
+import {
+  deleteProperty,
+  listenToProperties,
+  updatePropertyValidation,
+} from "./propertiesThunks";
+import { clearError } from "./propertiesSlice";
 
 const statusMap: { [key: number]: string } = {
   0: "libre",
@@ -34,6 +26,9 @@ const PropertyManagement: React.FC = () => {
     loading,
     error,
   } = useAppSelector((state) => state.properties);
+  const { user } = useAppSelector((state) => state.auth);
+  const { list: users } = useAppSelector((state) => state.users);
+  const to = user?.email || ""; // Ensure user is defined and has an email
 
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [typeFilter, setTypeFilter] = useState<string>("all");
@@ -41,17 +36,6 @@ const PropertyManagement: React.FC = () => {
   const [validationFilter, setValidationFilter] = useState<string>("all");
   const [selectedProperty, setSelectedProperty] =
     useState<FirestoreProperty | null>(null);
-
-  // Start listening to properties on mount
-  useEffect(() => {
-    dispatch(listenToProperties());
-
-    // Cleanup on unmount
-    return () => {
-      // Assuming you have a way to store and call unsubscribe; for simplicity, Redux can handle it if extended
-      // You might need to dispatch a cleanup action if unsubscribe is stored in state
-    };
-  }, [dispatch]);
 
   // Clear error on mount or when needed
   useEffect(() => {
@@ -81,16 +65,53 @@ const PropertyManagement: React.FC = () => {
 
   const handlePropertyAction = async (propertyId: string, action: string) => {
     console.log(`Action ${action} sur propriété ${propertyId}`);
+    const property = properties.find((p) => p.id === propertyId);
+    if (!property) {
+      console.error("Propriété non trouvée");
+      return;
+    }
+
+    // Prepare email data using service
+    const emailData = await preparePropertyEmailData(
+      property,
+      users,
+      to,
+      action
+    );
 
     switch (action) {
       case "approve":
-        await dispatch(approveProperty(propertyId));
+        await dispatch(
+          updatePropertyValidation({
+            propertyId,
+            emailData,
+            status: "accepte",
+          })
+        );
         break;
       case "reject":
-        await dispatch(rejectProperty(propertyId));
+        await dispatch(
+          updatePropertyValidation({
+            propertyId,
+            emailData,
+            status: "rejete",
+          })
+        );
         break;
       case "edit":
         navigate(`/properties/${propertyId}/edit`);
+        break;
+      case "cancel": // Assuming "annulation" maps to a cancel action; adjust if needed
+        await dispatch(
+          updatePropertyValidation({
+            propertyId,
+            emailData,
+            status: "annule", // Adjust status for cancel
+          })
+        );
+        break;
+      case "delete":
+        await dispatch(deleteProperty(propertyId));
         break;
       default:
         // Other actions like view are handled via setSelectedProperty
@@ -98,132 +119,40 @@ const PropertyManagement: React.FC = () => {
     }
   };
 
-  const PropertyCard: React.FC<{
-    property: FirestoreProperty;
-    onAction: (action: string) => void;
-  }> = ({ property, onAction }) => (
-    <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700 overflow-hidden hover:shadow-md transition-shadow">
-      <div className="relative">
-        <img
-          src={property.images[0] || "https://via.placeholder.com/400x200"}
-          alt={property.title}
-          className="w-full h-48 object-cover"
-        />
-        <div className="absolute top-4 left-4 flex space-x-2">
-          <span
-            className={`px-2 py-1 rounded-full text-xs font-medium ${
-              property.nomType.toLowerCase().includes("appartement")
-                ? "bg-blue-100 text-blue-800"
-                : "bg-purple-100 text-purple-800"
-            }`}
-          >
-            {property.nomType}
-          </span>
-          <span
-            className={`px-2 py-1 rounded-full text-xs font-medium ${
-              statusMap[property.statut] === "libre"
-                ? "bg-green-100 text-green-800"
-                : statusMap[property.statut] === "occupe"
-                ? "bg-red-100 text-red-800"
-                : "bg-yellow-100 text-yellow-800"
-            }`}
-          >
-            {statusMap[property.statut]}
-          </span>
-        </div>
-        <div className="absolute top-4 right-4">
-          <span
-            className={`px-2 py-1 rounded-full text-xs font-medium ${
-              property.validationStatus === "accepte"
-                ? "bg-green-100 text-green-800"
-                : property.validationStatus === "rejete"
-                ? "bg-red-100 text-red-800"
-                : "bg-yellow-100 text-yellow-800"
-            }`}
-          >
-            {property.validationStatus === "accepte"
-              ? "Validé"
-              : property.validationStatus === "rejete"
-              ? "Rejeté"
-              : "En attente"}
-          </span>
-        </div>
-      </div>
+  // Service function to prepare email data (business logic separated)
+  const preparePropertyEmailData = async (
+    property: FirestoreProperty,
+    users: any[], // Adjust type as needed
+    to: string,
+    action: string
+  ) => {
+    const currency = property.devise;
+    const frequency = property.frequence;
+    const propertyTitle = property.title;
+    const propertyType = property.nomType;
+    const ownerId = property.userId || "N/A"; // Adjust based on your data structure
+    const owner = users.find((u) => u.id === ownerId) || null;
+    const price = property.prix;
+    const propertyAddress = `${property.adresse}, ${property.quartier}, ${property.ville}`;
 
-      <div className="p-6">
-        <div className="flex items-start justify-between mb-4">
-          <div>
-            <h3 className="font-semibold text-gray-900 dark:text-white text-lg">
-              {property.title}
-            </h3>
-            <div className="flex items-center text-gray-500 dark:text-gray-400 text-sm mt-1">
-              <MapPin className="w-4 h-4 mr-1" />
-              {`${property.adresse}, ${property.quartier}, ${property.ville}`}
-            </div>
-          </div>
-          <div className="text-right">
-            <div className="flex items-center text-orange-600 font-bold text-xl">
-              <DollarSign className="w-5 h-5 mr-1" />
-              {property.prix.toLocaleString()} {property.devise}/
-              {property.frequence}
-            </div>
-            <div className="text-sm text-gray-500 dark:text-gray-400">
-              {property.surface}m²
-            </div>
-          </div>
-        </div>
+    // tenant and contractDetails can be added if available
+    // const tenant = property.tenant || null;
+    // const contractDetails = property.contractDetails || null;
 
-        <p className="text-gray-600 dark:text-gray-300 text-sm mb-4 line-clamp-2">
-          {property.description}
-        </p>
-
-        <div className="flex items-center justify-between">
-          <div className="text-sm text-gray-500 dark:text-gray-400">
-            Créé le {new Date(property.created_at).toLocaleDateString()}
-          </div>
-
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={() => setSelectedProperty(property)}
-              className="p-2 text-gray-400 hover:text-blue-500 transition-colors"
-              title="Voir détails"
-              disabled={loading}
-            >
-              <Eye className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => onAction("edit")}
-              className="p-2 text-gray-400 hover:text-orange-500 transition-colors"
-              title="Modifier"
-              disabled={loading}
-            >
-              <Edit className="w-4 h-4" />
-            </button>
-            {property.validationStatus === "en_attente" && (
-              <>
-                <button
-                  onClick={() => onAction("approve")}
-                  className="p-2 text-gray-400 hover:text-green-500 transition-colors"
-                  title="Valider"
-                  disabled={loading}
-                >
-                  <Check className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => onAction("reject")}
-                  className="p-2 text-gray-400 hover:text-red-500 transition-colors"
-                  title="Rejeter"
-                  disabled={loading}
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+    return {
+      to,
+      currency,
+      frequency,
+      propertyTitle,
+      propertyType,
+      owner, // Pass owner for email service
+      // tenant,
+      // contractDetails,
+      price,
+      propertyAddress,
+      actionType: action as "approve" | "reject" | "cancel", // Type for email customization
+    };
+  };
 
   if (loading && properties.length === 0) {
     return <div className="p-6 text-center">Chargement des propriétés...</div>;
@@ -245,7 +174,9 @@ const PropertyManagement: React.FC = () => {
           </p>
         </div>
         <button
-          onClick={() => {}}
+          onClick={() => {
+            navigate("/properties/add");
+          }}
           className="flex items-center space-x-2 bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600 transition-colors"
           disabled={loading}
         >
@@ -311,6 +242,8 @@ const PropertyManagement: React.FC = () => {
             key={property.id}
             property={property}
             onAction={(action) => handlePropertyAction(property.id, action)}
+            loading={loading}
+            setSelectedProperty={setSelectedProperty}
           />
         ))}
       </div>
@@ -516,6 +449,18 @@ const PropertyManagement: React.FC = () => {
                             Rejeter la propriété
                           </button>
                         </>
+                      )}
+                      {/* Add cancel action if needed */}
+                      {selectedProperty.validationStatus === "accepte" && (
+                        <button
+                          onClick={() =>
+                            handlePropertyAction(selectedProperty.id, "cancel")
+                          }
+                          className="w-full text-left px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 dark:hover:bg-gray-900/20 rounded-lg transition-colors"
+                          disabled={loading}
+                        >
+                          Annuler la propriété
+                        </button>
                       )}
                     </div>
                   </div>

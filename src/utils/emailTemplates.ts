@@ -1,10 +1,11 @@
 import axios from 'axios';
 
-interface KinaruEmailProps {
+export interface PropertyEmailProps {
   to: string;
   propertyTitle: string;
   propertyType: string;
   propertyAddress: string;
+  actionType: "approve" | "reject" | "cancel";
   price: number;
   currency: string;
   frequency: string;
@@ -36,24 +37,53 @@ export async function sendPropertyNotificationEmail({
   tenant,
   owner,
   contractDetails,
-}: KinaruEmailProps) {
+  actionType,
+}: PropertyEmailProps) {
+  let subject = `Kinaru - Notification pour ${propertyTitle}`;
+  let actionText = 'Une mise à jour a été effectuée concernant votre propriété.';
+  let actionColor = '#f97316'; // Orange default
+  let headerTitle = 'Notification Immobilière';
+
+  switch (actionType) {
+    case 'approve':
+      subject = `Kinaru - Validation acceptée pour ${propertyTitle}`;
+      actionText = 'Votre propriété a été validée avec succès ! Félicitations !';
+      actionColor = '#10b981'; // Green
+      headerTitle = 'Validation Acceptée';
+      break;
+    case 'reject':
+      subject = `Kinaru - Validation rejetée pour ${propertyTitle}`;
+      actionText = 'Malheureusement, votre propriété a été rejetée. Veuillez vérifier les critères et soumettre une nouvelle demande si nécessaire.';
+      actionColor = '#ef4444'; // Red
+      headerTitle = 'Validation Rejetée';
+      break;
+    case 'cancel':
+      subject = `Kinaru - Annulation pour ${propertyTitle}`;
+      actionText = 'Votre propriété a été annulée. Si cela est une erreur, contactez-nous pour plus de détails.';
+      actionColor = '#6b7280'; // Gray
+      headerTitle = 'Annulation Effectuée';
+      break;
+  }
+
   const htmlPart = `
     <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 32px; background: #ffffff; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
       <!-- Header avec logo -->
-      <div style="text-align: center; margin-bottom: 32px; padding-bottom: 24px; border-bottom: 2px solid #f97316;">
+      <div style="text-align: center; margin-bottom: 32px; padding-bottom: 24px; border-bottom: 2px solid ${actionColor};">
         <img src="https://kinaru.com/logo.png" alt="Kinaru" style="height: 40px; margin-bottom: 16px;">
-        <h1 style="color: #1e293b; font-size: 24px; margin: 0;">Notification Immobilière</h1>
+        <h1 style="color: #1e293b; font-size: 24px; margin: 0;">${headerTitle}</h1>
       </div>
 
       <!-- Contenu principal -->
       <div style="margin-bottom: 32px;">
         <p style="font-size: 16px; color: #334155; line-height: 1.6;">
-          Une nouvelle activité a été enregistrée concernant la propriété suivante :
+          Bonjour,<br><br>
+          ${actionText}<br><br>
+          Voici les détails de la propriété concernée :
         </p>
 
         <!-- Carte de la propriété -->
         <div style="background: #f8fafc; border-radius: 8px; padding: 24px; margin: 20px 0; border: 1px solid #e2e8f0;">
-          <h2 style="color: #f97316; font-size: 20px; margin: 0 0 16px 0;">${propertyTitle}</h2>
+          <h2 style="color: ${actionColor}; font-size: 20px; margin: 0 0 16px 0;">${propertyTitle}</h2>
           
           <div style="display: grid; grid-template-columns: 1fr; gap: 12px;">
             <div style="display: flex; align-items: center; gap: 8px;">
@@ -124,13 +154,13 @@ export async function sendPropertyNotificationEmail({
         </p>
         <div style="margin-top: 16px;">
           <a href="https://admin.kinaru.com" 
-             style="display: inline-block; background: #f97316; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 500;">
+             style="display: inline-block; background: ${actionColor}; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 500;">
             Accéder à mon espace
           </a>
         </div>
         <p style="color: #94a3b8; font-size: 12px; margin-top: 24px;">
           © ${new Date().getFullYear()} Kinaru. Tous droits réservés.<br>
-          Pour toute assistance, contactez <a href="mailto:support@kinaru.com" style="color: #f97316; text-decoration: none;">support@kinaru.com</a>
+          Pour toute assistance, contactez <a href="mailto:support@kinaru.com" style="color: ${actionColor}; text-decoration: none;">support@kinaru.com</a>
         </p>
       </div>
     </div>
@@ -140,9 +170,9 @@ export async function sendPropertyNotificationEmail({
     "/sendEmails",
     {
       emails: [to],
-      subject: `Kinaru - Nouvelle notification pour ${propertyTitle}`,
+      subject,
       senderName: "Kinaru Immobilier",
-      textPart: `Notification concernant la propriété ${propertyTitle}.\nType: ${propertyType}\nAdresse: ${propertyAddress}\nPrix: ${price} ${currency}/${frequency}`,
+      textPart: `${actionText}\n\nPropriété: ${propertyTitle}\nType: ${propertyType}\nAdresse: ${propertyAddress}\nPrix: ${price} ${currency}/${frequency}`,
       htmlPart,
     }
   );
