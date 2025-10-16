@@ -6,6 +6,8 @@ import { listenToUsers } from "./components/Users/usersThunks";
 import { initAuth } from "./pages/login/zuthThunks";
 import { listenToProperties } from "./components/Properties/propertiesThunks";
 import { listenToContracts } from "./components/Contracts/contractsThunk";
+import { listenToCommercialProperties } from "./pages/properties/commercials/commercialPropertiesThunks";
+import { listenToResidentialProperties } from "./pages/properties/residential/thunks";
 
 export default function Bootstrap() {
   const dispatch = useAppDispatch();
@@ -16,6 +18,10 @@ export default function Bootstrap() {
     dispatch(listenToProperties());
 
     dispatch(listenToContracts()); // If not already listening globally
+
+    // 
+    dispatch(listenToCommercialProperties());
+    dispatch(listenToResidentialProperties());
   }, [dispatch]);
 
   return null;

@@ -1,4 +1,4 @@
-import  { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   BrowserRouter as Router,
   Routes,
@@ -23,6 +23,9 @@ import LoginPage from "./pages/login/page";
 import PropertyEditForm from "./pages/properties/upadate-properties";
 import NotificationCard from "./pages/email-template";
 import PropertyAddForm from "./pages/properties/add-propertie";
+import CommercialPropertiesForm from "./pages/properties/commercials/commercial-properties-form";
+import ResidentialsPropertiesList from "./pages/properties/residential/page";
+import CommercialPropertiesList from "./pages/properties/commercials/page";
 
 function App() {
   const { user, error, loading } = useAppSelector((state) => state.auth);
@@ -108,14 +111,36 @@ function App() {
                 <Route path="/users/:id" element={<UserEditForm />} />
                 {/*  */}
                 <Route path="/properties" element={<PropertyManagement />} />
-                    <Route
-                  path="/properties/add"
-                  element={<PropertyAddForm />}
-                />
+                <Route path="/properties/add" element={<PropertyAddForm />} />
                 <Route
                   path="/properties/:id/edit"
                   element={<PropertyEditForm />}
                 />
+                {/* commercial properties pages */}
+                <Route
+                  path="/residential-properties"
+                  element={<ResidentialsPropertiesList />}
+                />
+
+                <Route
+                  path="/residential-add"
+                  element={<CommercialPropertiesForm />}
+                />
+
+                {/*  */}
+
+                       {/* commercial properties pages */}
+                <Route
+                  path="/commercial-properties"
+                  element={<CommercialPropertiesList />}
+                />
+
+                <Route
+                  path="/commercial-add"
+                  element={<CommercialPropertiesForm />}
+                />
+
+                {/*  */}
                 <Route
                   path="/transactions"
                   element={<TransactionManagement />}

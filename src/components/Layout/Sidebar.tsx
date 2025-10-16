@@ -25,6 +25,8 @@ const menuItems = [
   { path: "/users", label: "Utilisateurs", icon: Users },
   { path: "/properties", label: "Propriétés", icon: Building },
   { path: "/email", label: "Carte", icon: Map },
+  { path: "/residential-properties", label: "R-Propriétés", icon: Map },
+  { path: "/commercial-properties", label: "C-Propriétés", icon: Map },
   { path: "/transactions", label: "Transactions", icon: CreditCard },
   { path: "/contracts", label: "Contrats", icon: FileText },
   { path: "/messaging", label: "Messagerie", icon: MessageSquare },
@@ -32,6 +34,8 @@ const menuItems = [
   { path: "/partners", label: "Partenaires", icon: Handshake },
   { path: "/logs", label: "Journal", icon: History },
   { path: "/settings", label: "Paramètres", icon: Settings },
+
+  // 
 ];
 
 export default function Sidebar({ isCollapsed, onToggleCollapse }: SidebarProps) {

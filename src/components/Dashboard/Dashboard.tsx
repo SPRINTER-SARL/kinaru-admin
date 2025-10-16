@@ -1,19 +1,11 @@
-// components/Dashboard/Dashboard.tsx
-// Traduit ceci en francais : abschelzen
-// 
-
-import React from "react";
 import {
   Users,
   Building,
-  CreditCard,
-  FileText,
   TrendingUp,
   AlertTriangle,
 } from "lucide-react";
 import { useAppSelector } from "../../store/hooks";
 import { useNavigate } from "react-router-dom";
-import { USER_TYPES } from "../../utils/firebaseCollections";
 
 const StatCard = ({ title, value, icon: Icon, trend, color }: any) => (
   <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700">
