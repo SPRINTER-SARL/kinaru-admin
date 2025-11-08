@@ -16,10 +16,7 @@ export default function Bootstrap() {
     dispatch(initAuth());
     dispatch(listenToUsers());
     dispatch(listenToProperties());
-
-    dispatch(listenToContracts()); // If not already listening globally
-
-    // 
+    dispatch(listenToContracts());
     dispatch(listenToCommercialProperties());
     dispatch(listenToResidentialProperties());
   }, [dispatch]);
